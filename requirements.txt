@@ -4,3 +4,5 @@ python-dotenv
 gTTS
 qdrant-client
 sentence-transformers
+torch
+torchvision
