@@ -6,14 +6,15 @@ from retriever import retrieve_top_k
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
+# Sanitize API keys
 groq_key = (os.getenv("GROQ_API_KEY") or "").strip('"' "' \t\r\n")
 sarvam_key = (os.getenv("SARVAM_API_KEY") or "").strip('"' "' \t\r\n")
 
 if not groq_key:
-    raise ValueError("GROQ_API_KEY is missing! Please check your .env file.")
+    raise ValueError("GROQ_API_KEY is missing! Please check your Secrets or .env file.")
 
 def get_active_groq_models():
-    """Fetch live available model IDs directly from Groq API."""
+    """Fetch available models dynamically or fallback to standard Llama 3 models."""
     url = "https://api.groq.com/openai/v1/models"
     headers = {"Authorization": f"Bearer {groq_key}"}
     try:
@@ -25,12 +26,17 @@ def get_active_groq_models():
                 return models
     except Exception:
         pass
-    # Standard active Groq fallbacks
     return ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
 
 def speech_to_text(audio_path):
+    """Transcribe voice audio using Sarvam AI STT API."""
+    if not sarvam_key:
+        return "ERROR: Missing SARVAM_API_KEY in environment variables."
+
     url = "https://api.sarvam.ai/speech-to-text"
-    headers = {"api-subscription-key": sarvam_key}
+    headers = {
+        "api-subscription-key": sarvam_key
+    }
     
     ext = os.path.splitext(audio_path)[1].lower()
     mime_types = {
@@ -42,15 +48,31 @@ def speech_to_text(audio_path):
     }
     file_mime = mime_types.get(ext, "audio/mpeg")
     
-    with open(audio_path, "rb") as f:
-        files = {"file": (os.path.basename(audio_path), f, file_mime)}
-        data = {"model": "saaras:v3"}
-        response = requests.post(url, headers=headers, files=files, data=data)
-        
-    res_json = response.json()
-    return res_json.get("transcript", "")
+    # Payload requirements according to Sarvam AI REST specification
+    data = {
+        "model": "saaras:v3",
+        "mode": "transcribe",
+        "language_code": "unknown",
+        "with_timestamps": "false"
+    }
+    
+    try:
+        filename = os.path.basename(audio_path)
+        with open(audio_path, "rb") as f:
+            files = {"file": (filename, f.read(), file_mime)}
+            response = requests.post(url, headers=headers, data=data, files=files, timeout=30)
+            
+        if response.status_code == 200:
+            res_json = response.json()
+            transcript = res_json.get("transcript", "").strip()
+            return transcript if transcript else "Empty transcript returned by API"
+        else:
+            return f"Sarvam Error {response.status_code}: {response.text}"
+    except Exception as e:
+        return f"STT Exception: {str(e)}"
 
 def run_rag_pipeline(user_query):
+    """Execute vector retrieval and pass contexts into Groq LLM."""
     # Step 1: Retrieve context from Qdrant vector database
     contexts = retrieve_top_k(user_query, k=2)
     
