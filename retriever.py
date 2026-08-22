@@ -3,9 +3,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
-# Load model and initialize client
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
-client = QdrantClient(path="./qdrant_db")  # Local persistent storage so index never drops in memory
+# Use in-memory database to prevent file locking issues on Streamlit Cloud
+client = QdrantClient(":memory:")
 COLLECTION_NAME = "msmarco_chunks"
 
 def build_index(chunks, force_rebuild=False):
@@ -36,7 +36,7 @@ def retrieve_top_k(query, k=2):
         
     query_vector = encoder.encode(query).tolist()
     
-    # Dual-compatibility check for qdrant-client versions
+    # Handle version differences in Qdrant client methods
     if hasattr(client, "query_points"):
         response = client.query_points(
             collection_name=COLLECTION_NAME,
