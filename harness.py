@@ -6,7 +6,7 @@ from retriever import retrieve_top_k_from_chunks
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
-# Sanitize keys from extra quotes or whitespace
+# Sanitize keys from extra quotes, whitespace, or hidden newlines
 raw_groq = os.getenv("GROQ_API_KEY") or ""
 groq_key = raw_groq.strip('"' "' \t\r\n")
 
@@ -34,13 +34,18 @@ def get_active_groq_models():
 
 
 def speech_to_text(audio_path):
-    """Transcribe voice audio using Sarvam AI STT API."""
-    if not sarvam_key:
+    """Transcribe voice audio using Sarvam AI STT API with dual header fallback."""
+    clean_sarvam_key = str(sarvam_key).strip('"' "' \t\r\n")
+
+    if not clean_sarvam_key:
         return "ERROR: Missing SARVAM_API_KEY in environment variables."
 
     url = "https://api.sarvam.ai/speech-to-text"
+    
+    # Pass dual headers to satisfy all Sarvam platform authentication types
     headers = {
-        "api-subscription-key": sarvam_key
+        "api-subscription-key": clean_sarvam_key,
+        "Authorization": f"Bearer {clean_sarvam_key}"
     }
     
     ext = os.path.splitext(audio_path)[1].lower()
@@ -77,11 +82,13 @@ def speech_to_text(audio_path):
 
 
 def run_rag_pipeline(user_query, chunks=None):
-    """Execute vector/keyword retrieval using cached chunks and generate LLM answer."""
-    if not groq_key:
+    """Retrieve context directly using passed dataset chunks and query Groq LLM."""
+    clean_groq_key = str(groq_key).strip('"' "' \t\r\n")
+    
+    if not clean_groq_key:
         return "Error: GROQ_API_KEY is missing or empty in environment configuration."
 
-    # Step 1: Retrieve context directly using passed chunks
+    # Step 1: Retrieve context directly using cached chunks
     contexts = retrieve_top_k_from_chunks(chunks or [], user_query, k=2)
     
     # Strict Guardrail Check
@@ -99,7 +106,7 @@ def run_rag_pipeline(user_query, chunks=None):
     
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {groq_key}",
+        "Authorization": f"Bearer {clean_groq_key}",
         "Content-Type": "application/json"
     }
     
