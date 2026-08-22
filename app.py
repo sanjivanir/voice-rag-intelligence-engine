@@ -21,7 +21,7 @@ st.set_page_config(
 def initialize_knowledge_base():
     raw_passages = get_msmarco_passages(limit=100)
     chunks = sentence_chunking(raw_passages)
-    build_index(chunks)
+    build_index(chunks, force_rebuild=True)
     return len(chunks)
 
 total_chunks_indexed = initialize_knowledge_base()
