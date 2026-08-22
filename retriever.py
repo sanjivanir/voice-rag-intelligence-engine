@@ -1,17 +1,15 @@
+import os
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+# Initialize embedding model and Qdrant in-memory client
+encoder = SentenceTransformer("all-MiniLM-L6-v2")
 client = QdrantClient(":memory:")
-
-client.recreate_collection(
-    collection_name="msmarco",
-    vectors_config=VectorParams(size=384, distance=Distance.COSINE),
-)
+COLLECTION_NAME = "msmarco_chunks"
 
 def build_index(chunks, force_rebuild=False):
-    # If force_rebuild is True, delete the old collection so fresh passages are indexed
+    """Builds or rebuilds the Qdrant vector collection."""
     if force_rebuild and client.collection_exists(COLLECTION_NAME):
         client.delete_collection(COLLECTION_NAME)
         
@@ -20,7 +18,7 @@ def build_index(chunks, force_rebuild=False):
             collection_name=COLLECTION_NAME,
             vectors_config=VectorParams(size=384, distance=Distance.COSINE),
         )
-        # Add chunks into Qdrant
+        
         points = [
             PointStruct(
                 id=idx,
@@ -30,12 +28,17 @@ def build_index(chunks, force_rebuild=False):
             for idx, chunk in enumerate(chunks)
         ]
         client.upsert(collection_name=COLLECTION_NAME, points=points)
+
 def retrieve_top_k(query, k=2):
-    q_vec = embedding_model.encode(query).tolist()
-    # Using updated qdrant method query_points
-    response = client.query_points(
-        collection_name="msmarco", 
-        query=q_vec, 
+    """Searches Qdrant for top-k matching passage chunks."""
+    if not client.collection_exists(COLLECTION_NAME):
+        return []
+        
+    query_vector = encoder.encode(query).tolist()
+    search_result = client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=query_vector,
         limit=k
     )
-    return [hit.payload["text"] for hit in response.points]
+    
+    return [hit.payload["text"] for hit in search_result if "text" in hit.payload]
