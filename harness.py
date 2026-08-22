@@ -30,6 +30,10 @@ def get_active_groq_models():
 
 def speech_to_text(audio_path):
     """Transcribe voice audio using Sarvam AI STT API."""
+    # Ensure key is stripped of hidden quotes/whitespace
+    raw_key = os.getenv("SARVAM_API_KEY") or ""
+    sarvam_key = raw_key.strip('"' "' \t\r\n")
+
     if not sarvam_key:
         return "ERROR: Missing SARVAM_API_KEY in environment variables."
 
@@ -48,7 +52,6 @@ def speech_to_text(audio_path):
     }
     file_mime = mime_types.get(ext, "audio/mpeg")
     
-    # Payload requirements according to Sarvam AI REST specification
     data = {
         "model": "saaras:v3",
         "mode": "transcribe",
