@@ -1,7 +1,7 @@
 import os
 import requests
 from dotenv import load_dotenv
-from retriever import retrieve_top_k
+from retriever import retrieve_top_k_from_chunks
 
 # Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
@@ -76,13 +76,13 @@ def speech_to_text(audio_path):
         return f"STT Exception: {str(e)}"
 
 
-def run_rag_pipeline(user_query):
-    """Execute vector retrieval and pass contexts into Groq LLM."""
+def run_rag_pipeline(user_query, chunks=None):
+    """Execute vector/keyword retrieval using cached chunks and generate LLM answer."""
     if not groq_key:
         return "Error: GROQ_API_KEY is missing or empty in environment configuration."
 
-    # Step 1: Retrieve context strictly from Qdrant database
-    contexts = retrieve_top_k(user_query, k=2)
+    # Step 1: Retrieve context directly using passed chunks
+    contexts = retrieve_top_k_from_chunks(chunks or [], user_query, k=2)
     
     # Strict Guardrail Check
     if not contexts or len("".join(contexts).strip()) < 10:
@@ -118,7 +118,7 @@ def run_rag_pipeline(user_query):
             if res.status_code == 200:
                 return res.json()["choices"][0]["message"]["content"]
             else:
-                errors.append(f"{model_id}: {res.status_code} ({res.text})")
+                errors.append(f"{model_id}: {res.status_code}")
         except Exception as e:
             errors.append(f"{model_id}: {str(e)}")
             

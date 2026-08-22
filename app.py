@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 
 from harness import run_rag_pipeline, speech_to_text
 from ingest import get_msmarco_passages, sentence_chunking
-from retriever import build_index
 
 load_dotenv()
 
@@ -19,12 +18,13 @@ st.set_page_config(
 
 @st.cache_resource
 def initialize_knowledge_base():
+    """Ingests dataset and holds processed chunks in persistent Streamlit memory."""
     raw_passages = get_msmarco_passages(limit=100)
     chunks = sentence_chunking(raw_passages)
-    build_index(chunks, force_rebuild=True)
-    return len(chunks)
+    return chunks
 
-total_chunks_indexed = initialize_knowledge_base()
+cached_chunks = initialize_knowledge_base()
+total_chunks_indexed = len(cached_chunks)
 
 st.markdown("""
 <style>
@@ -123,7 +123,7 @@ with col_right:
                 # Step 2: RAG Pipeline Execution
                 with st.spinner("Searching vector database & generating answer..."):
                     rag_start = time.time()
-                    answer = run_rag_pipeline(transcript)
+                    answer = run_rag_pipeline(transcript, chunks=cached_chunks)
                     rag_duration = (time.time() - rag_start) * 1000
 
                 total_duration = (time.time() - total_start_time) * 1000
