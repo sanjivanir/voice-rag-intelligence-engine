@@ -3,12 +3,22 @@ import requests
 from dotenv import load_dotenv
 from retriever import retrieve_top_k
 
+# Load environment variables
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
-groq_key = (os.getenv("GROQ_API_KEY") or "").strip('"' "' \t\r\n")
-sarvam_key = (os.getenv("SARVAM_API_KEY") or "").strip('"' "' \t\r\n")
+# Sanitize keys from extra quotes or whitespace
+raw_groq = os.getenv("GROQ_API_KEY") or ""
+groq_key = raw_groq.strip('"' "' \t\r\n")
+
+raw_sarvam = os.getenv("SARVAM_API_KEY") or ""
+sarvam_key = raw_sarvam.strip('"' "' \t\r\n")
+
 
 def get_active_groq_models():
+    """Fetch live available model IDs directly from Groq API."""
+    if not groq_key:
+        return ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
+
     url = "https://api.groq.com/openai/v1/models"
     headers = {"Authorization": f"Bearer {groq_key}"}
     try:
@@ -22,12 +32,16 @@ def get_active_groq_models():
         pass
     return ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
 
+
 def speech_to_text(audio_path):
+    """Transcribe voice audio using Sarvam AI STT API."""
     if not sarvam_key:
         return "ERROR: Missing SARVAM_API_KEY in environment variables."
 
     url = "https://api.sarvam.ai/speech-to-text"
-    headers = {"api-subscription-key": sarvam_key}
+    headers = {
+        "api-subscription-key": sarvam_key
+    }
     
     ext = os.path.splitext(audio_path)[1].lower()
     mime_types = {
@@ -61,10 +75,16 @@ def speech_to_text(audio_path):
     except Exception as e:
         return f"STT Exception: {str(e)}"
 
+
 def run_rag_pipeline(user_query):
-    # Step 1: Retrieve context strictly from Qdrant vector database
+    """Execute vector retrieval and pass contexts into Groq LLM."""
+    if not groq_key:
+        return "Error: GROQ_API_KEY is missing or empty in environment configuration."
+
+    # Step 1: Retrieve context strictly from Qdrant database
     contexts = retrieve_top_k(user_query, k=2)
     
+    # Strict Guardrail Check
     if not contexts or len("".join(contexts).strip()) < 10:
         return "Guardrail Refusal: Query is out-of-scope or missing relevant context."
         
@@ -84,6 +104,7 @@ def run_rag_pipeline(user_query):
     }
     
     candidate_models = get_active_groq_models()
+    errors = []
     
     for model_id in candidate_models:
         payload = {
@@ -96,7 +117,9 @@ def run_rag_pipeline(user_query):
             res = requests.post(url, headers=headers, json=payload, timeout=10)
             if res.status_code == 200:
                 return res.json()["choices"][0]["message"]["content"]
-        except Exception:
-            continue
+            else:
+                errors.append(f"{model_id}: {res.status_code} ({res.text})")
+        except Exception as e:
+            errors.append(f"{model_id}: {str(e)}")
             
-    return "Error connecting to Groq API."
+    return f"Error connecting to Groq API. Details: {'; '.join(errors)}"
