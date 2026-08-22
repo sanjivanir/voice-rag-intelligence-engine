@@ -21,7 +21,7 @@ st.set_page_config(
 def initialize_knowledge_base():
     raw_passages = get_msmarco_passages(limit=100)
     chunks = sentence_chunking(raw_passages)
-    build_index(chunks, force_rebuild=True)  # Pass flag to overwrite old vectors
+    build_index(chunks, force_rebuild=True)
     return len(chunks)
 
 total_chunks_indexed = initialize_knowledge_base()
@@ -74,7 +74,6 @@ col_left, col_right = st.columns([1, 1], gap="large")
 
 with col_left:
     st.subheader("1. Select Audio Query")
-    
     tab1, tab2 = st.tabs(["📁 File Upload", "🎙️ Live Microphone"])
     
     recorded_audio = None

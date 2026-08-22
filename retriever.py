@@ -3,9 +3,9 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from sentence_transformers import SentenceTransformer
 
-# Initialize embedding model and Qdrant in-memory client
+# Load model and initialize client
 encoder = SentenceTransformer("all-MiniLM-L6-v2")
-client = QdrantClient(":memory:")
+client = QdrantClient(path="./qdrant_db")  # Local persistent storage so index never drops in memory
 COLLECTION_NAME = "msmarco_chunks"
 
 def build_index(chunks, force_rebuild=False):
@@ -30,15 +30,25 @@ def build_index(chunks, force_rebuild=False):
         client.upsert(collection_name=COLLECTION_NAME, points=points)
 
 def retrieve_top_k(query, k=2):
-    """Searches Qdrant for top-k matching passage chunks."""
+    """Searches Qdrant for top-k matching passage chunks using compatible search methods."""
     if not client.collection_exists(COLLECTION_NAME):
         return []
         
     query_vector = encoder.encode(query).tolist()
-    search_result = client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
-        limit=k
-    )
     
-    return [hit.payload["text"] for hit in search_result if "text" in hit.payload]
+    # Dual-compatibility check for qdrant-client versions
+    if hasattr(client, "query_points"):
+        response = client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=query_vector,
+            limit=k
+        )
+        hits = response.points
+    else:
+        hits = client.search(
+            collection_name=COLLECTION_NAME,
+            query_vector=query_vector,
+            limit=k
+        )
+    
+    return [hit.payload["text"] for hit in hits if "text" in hit.payload]
