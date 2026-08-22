@@ -112,28 +112,15 @@ with col_right:
             with st.spinner("Transcribing audio via Sarvam AI..."):
                 stt_start = time.time()
                 try:
-                    # Reads bytes from the file path to pass to STT function
-                    with open(tmp_path, "rb") as f:
-                        file_bytes = f.read()
-                    
-                    # Pass bytes to transcribe_audio function
-                    transcript = transcribe_audio(file_bytes, filename=os.path.basename(tmp_path))
+                    transcript = speech_to_text(tmp_path)
                     stt_duration = (time.time() - stt_start) * 1000
                 finally:
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
 
-            # Check if transcript returned an error string or valid text
-            if not transcript or transcript.startswith("Sarvam Error") or transcript.startswith("ERROR:") or transcript.startswith("STT Exception:"):
+            if not transcript or str(transcript).startswith("Sarvam Error") or str(transcript).startswith("ERROR:") or str(transcript).startswith("STT Exception:"):
                 st.error(f"STT Diagnostic Output: {transcript}")
             else:
-                # Step 2: RAG Pipeline Execution
-                with st.spinner("Searching vector database & generating answer..."):
-                    rag_start = time.time()
-                    answer = run_rag_pipeline(transcript)
-                    rag_duration = (time.time() - rag_start) * 1000
-
-                total_duration = (time.time() - total_start_time) * 1000
                 # Step 2: RAG Pipeline Execution
                 with st.spinner("Searching vector database & generating answer..."):
                     rag_start = time.time()
