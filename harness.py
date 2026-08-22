@@ -78,22 +78,14 @@ def run_rag_pipeline(user_query):
     )
     
     url = "https://api.groq.com/openai/v1/chat/completions"
-    
-    # Strip any potential surrounding quotes or whitespace from the key
-    clean_groq_key = groq_key.strip("'\" \t\r\n")
-    if not clean_groq_key:
-        return "Error: GROQ_API_KEY is missing or empty in environment configuration."
-
     headers = {
-        "Authorization": f"Bearer {clean_groq_key}",
+        "Authorization": f"Bearer {groq_key}",
         "Content-Type": "application/json"
     }
     
-    # Hardcoded fallback list of reliable models
-    model_list = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"]
-    errors = []
+    candidate_models = get_active_groq_models()
     
-    for model_id in model_list:
+    for model_id in candidate_models:
         payload = {
             "model": model_id,
             "messages": [{"role": "user", "content": prompt}],
@@ -104,9 +96,7 @@ def run_rag_pipeline(user_query):
             res = requests.post(url, headers=headers, json=payload, timeout=10)
             if res.status_code == 200:
                 return res.json()["choices"][0]["message"]["content"]
-            else:
-                errors.append(f"{model_id}: {res.status_code} - {res.text}")
-        except Exception as e:
-            errors.append(f"{model_id}: {str(e)}")
+        except Exception:
+            continue
             
-    return f"Error connecting to Groq API. Details: {'; '.join(errors)}"
+    return "Error connecting to Groq API."
